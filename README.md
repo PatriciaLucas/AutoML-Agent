@@ -1,6 +1,6 @@
 # 🤖 AutoML-Agent
 
-> Projeto desenvolvido pelo grupo de pesquisa **Agents-of-Future**  
+> Projeto desenvolvido pelo Projeto **Agents-of-Future** do FutureLab (DCC-UFMG) em Parceria com a KUNUMI S/A.
 >  <p align="left">
 >  <img src="https://github.com/PatriciaLucas/AutoML-Agent/blob/main/docs/slide_logos.png?raw=true" alt="Arquitetura" width="300"/>
 >  </p> 
