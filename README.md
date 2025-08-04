@@ -27,7 +27,6 @@ AutoML-Agent/
 - **docs/** – Documentação, artigos e figuras
 - **src/** – Código-fonte principal
 - **notebooks/** – Experimentos e protótipos em Jupyter
-- **tests/** – Testes automatizados
 - **requirements.txt** – Dependências do projeto
 - **README.md** – Documentação principal
 
