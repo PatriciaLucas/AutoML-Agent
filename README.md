@@ -16,7 +16,7 @@ O objetivo é fornecer uma **interface mais acessível, interativa e explicativa
 ## Estrutura de orquestração dos agentes
 
 <p align="center">
-  <img src="https://github.com/PatriciaLucas/AutoML-Agent/blob/main/docs/graph_agents.png?raw=true" alt="Arquitetura" width="400"/>
+  <img src="" alt="Arquitetura" width="400"/>
 </p>
 
 ---
