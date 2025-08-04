@@ -41,7 +41,6 @@ AutoML-Agent/
 - Gabriel Veloso
 - Izabela Esber Xavier
 - Júlia Almeida Luna
-- Julia Zibetti Castilhos de Mellos
 - Patrícia de Oliveira e Lucas
 
 ---
