@@ -12,6 +12,11 @@
 Este projeto investiga o uso de **agentes baseados em LLMs (Large Language Models)** para apoiar usuários de sistemas AutoML.  
 O objetivo é fornecer uma **interface mais acessível, interativa e explicativa** através de linguagem natural, tornando os processos de Machine Learning mais fáceis de usar.
 
+## Sistema de orquestração de agentes
+>  <p align="left">
+>  <img src="https://github.com/PatriciaLucas/AutoML-Agent/blob/main/docs/sistema.png?raw=true" alt="Arquitetura" width="300"/>
+>  </p> 
+
 
 ---
 
