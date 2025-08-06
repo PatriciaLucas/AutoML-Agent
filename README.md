@@ -14,7 +14,7 @@ O objetivo é fornecer uma **interface mais acessível, interativa e explicativa
 
 ## Sistema de orquestração de agentes
 >  <p align="left">
->  <img src="https://github.com/PatriciaLucas/AutoML-Agent/blob/main/docs/sistema.png?raw=true" alt="Arquitetura" width="600"/>
+>  <img src="https://github.com/PatriciaLucas/AutoML-Agent/blob/main/docs/sistema.png?raw=true" alt="Arquitetura" width="800"/>
 >  </p> 
 
 
