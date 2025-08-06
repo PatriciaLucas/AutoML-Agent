@@ -13,12 +13,6 @@ Este projeto investiga o uso de **agentes baseados em LLMs (Large Language Model
 O objetivo é fornecer uma **interface mais acessível, interativa e explicativa** através de linguagem natural, tornando os processos de Machine Learning mais fáceis de usar.
 
 
-## Estrutura de orquestração dos agentes
-
-<p align="center">
-  <img src="" alt="Arquitetura" width="400"/>
-</p>
-
 ---
 
 ## 📂 Estrutura do Repositório
