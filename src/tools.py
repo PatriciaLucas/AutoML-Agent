@@ -26,7 +26,7 @@ class SchemaAutoml(BaseModel):
     input: str
    
 
-class MyTools:
+class Tools:
 
     @staticmethod
     @tool(args_schema=SchemaAutoml, return_direct=True)
