@@ -1,0 +1,14 @@
+langgraph
+langchain_community
+langchain
+langchain_experimental
+python-dotenv
+ipykernel
+streamlit
+git+https://github.com/PatriciaLucas/AutoML.git
+darts
+emd
+matplotlib
+statsmodels
+langgraph-cli
+langgraph-cli[inmem]
