@@ -1,4 +1,4 @@
-class Prompt:
+class Prompts:
 
     def get_prompt(name: str, **kwargs) -> str:
         match name:
