@@ -3,7 +3,6 @@ from langgraph.graph import START, END, StateGraph
 from langgraph.prebuilt import ToolNode, tools_condition
 
 
-
 # Estados
 class State(TypedDict):
     msg: str              # mensagem do usuário
