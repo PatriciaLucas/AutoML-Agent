@@ -36,7 +36,12 @@ class Prompts:
 
 
             case 'Avaliação': # Recebe as ações do Agente Pandas e solicita ao Agente Avaliador que aprove ou não essas ações de acordo com a etapa que foi solicitada.
-                prompt = f"...."
+                
+                #action = 
+                #step =
+                prompt = f"""Você é um avaliador de ações em um processo de análise de series temporais. Seu trabalho é decidir se uma ação deve ser aplicada ou não em uma determinada etapa. 
+                            Responda apenas Sim ou Não. 
+                            A ação {actions} deve ser executada para a etapa {etapa}?"""
 
 
 
