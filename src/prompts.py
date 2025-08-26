@@ -45,8 +45,50 @@ class Prompts:
 
 
 
-            case 'Resumo': # Recebe as ações do Agente Pandas e solicita ao Agente Resumidor que resuma essas ações. 
-                prompt = "...."
+            case 'Resumo':  # Recebe as ações do Agente Pandas e solicita ao Agente Resumidor que resuma essas ações.
+                # Espera receber via kwargs:
+                # - steps: string com linhas "THOUGHT: ..." e "ACTION: tool(args)" (na ordem em que ocorreram)
+                # - outputs: string com os outputs brutos das tools (concatenados, na mesma ordem)
+                steps = kwargs.get("steps", "")
+                outputs = kwargs.get("outputs", "")
+                prompt = f"""
+                    Você é o Agente Resumidor. Receberá dois blocos abaixo:
+
+                    - steps: linhas alternadas no padrão 'THOUGHT: ...' e 'ACTION: tool(args)'
+                    - outputs: respostas brutas das tools (texto/tabelas/descrições), na ordem em que ocorreram
+
+                    OBJETIVO
+                    Escreva um relatório em pt-BR exatamente no formato:
+
+                    Steps:
+                    1) Nome do Step em Português: <título curto em pt-BR>
+                    Motivo: <copie/sintetize fielmente o THOUGHT correspondente, sem inventar>
+                    Ferramenta Escolhida: <nome da tool indicada em ACTION ou 'nenhuma'>
+                    Motivo da escolha da Ferramenta: <explique brevemente por que essa tool foi usada; se não houver, escreva 'não aplicável'>
+                    Resultado do "Step": <resuma o output associado a este step; se não houver output, escreva '—'>
+
+                    2) Nome do Step em Português: ...
+                    Motivo: ...
+                    Ferramenta Escolhida: ...
+                    Motivo da escolha da Ferramenta: ...
+                    Resultado do "Step": ...
+
+                    REGRAS
+                    - Mantenha a ordem cronológica dos steps.
+                    - Não invente ferramentas, dados ou resultados.
+                    - Associe outputs aos steps na mesma ordem (1º output para o 1º step que teve ACTION, e assim por diante).
+                    - Seja conciso e técnico; evite floreios.
+                    - Se não houver THOUGHT ou ACTION para algum step, preencha com '—' no campo faltante.
+                    - Se não houver nada para resumir, responda apenas: "Sem dados para resumir."
+
+                    DADOS
+                    Intermediate Steps:
+                    {steps}
+
+                    Outputs:
+                    {outputs}
+                    """.strip()
+
         
 
         return prompt
