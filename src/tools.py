@@ -40,9 +40,10 @@ class Tools:
         Retorna um DataFrame com as previsões.
         """
         # Extrair parâmetros com regex
-        target = re.search(r'target\s*=\s*["\']?(\w+)["\']?', input).group(1)
-        step_ahead = int(re.search(r'step_ahead\s*=\s*(\d+)', input).group(1))
-        max_lags = int(re.search(r'max_lags\s*=\s*(\d+)', input).group(1))
+        target = re.search(r'target\s*:\s*["\']?(\w+)["\']?', input).group(1)
+        step_ahead = int(re.search(r'step_ahead\s*:\s*(\d+)', input).group(1))
+        max_lags = int(re.search(r'max_lags\s*:\s*(\d+)', input).group(1))
+        decomposition = re.search(r'decomposition\s*:\s*(\w+)', input).group(1).lower() == "true"
 
         global df
 
