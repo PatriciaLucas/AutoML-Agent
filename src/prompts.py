@@ -32,7 +32,7 @@ class Prompts:
                  Gere a figura na Base64 que contenha o gráfico comparando os valores reais e previstos da coluna {target}.
                  
                  '''
-                """
+
             case 'Etapa 5': # Visualização grafo causal:
                 prompt = f"""Use a tool desenhar_grafo para gerar o grafo de importância das variáveis do modelo.
                 """
