@@ -367,15 +367,94 @@ class Tools:
         return variables
     
     @staticmethod
-    def desenhar_grafo(model):
+    def renomear_imf_para_target(d: dict, target) -> dict:
+        """
+        Troca qualquer ocorrência de 'IMF<digitos>' por target nas chaves.
+        """
+        return {re.sub(r'\bIMF\d+\b', target, k): v for k, v in d.items()}
+
+    
+    @staticmethod
+    def agrupar_dicts(model, dicts: List[Dict[str, List[float]]], min_value: float = -1) -> Dict[str, List[float]]:
+        """
+        Agrupa uma lista de dicionários (cada valor é uma lista [v1, v2]).
+        Regras:
+        - Se a key for repetida, soma o primeiro valor (v1).
+        - O primeiro valor final é limitado inferiormente por min_value (default -1).
+        - O segundo valor final é calculado como: max_lags - <numero_da_key>
+        Retorna: dict com a mesma set de keys e valores [v1_final, v2_final].
+        """
+
+        G = model.G_list[model.target]
+        lags = G.where(G).stack().index.tolist()
+        max_lags = max(x[0] for x in lags)  # valor máximo de lag
+
+        # 1) soma os primeiros valores por key
+        sums = {}
+        for d in dicts:
+            for k, (v1, _) in d.items():
+                sums[k] = sums.get(k, 0.0) + float(v1)
+
+        # 2) aplica limite inferior (min_value)
+        for k in sums:
+            if sums[k] < min_value:
+                sums[k] = min_value
+
+        # 3) calcula o segundo valor como max_lags - número da key
+        result = {}
+        for k in sums:
+            m = re.search(r"\s(\d+)$", k)
+            if m:
+                num = int(m.group(1))
+            else:
+                num = 0  # fallback
+            v2 = max_lags - num
+            result[k] = [sums[k], v2]
+
+        return result, max_lags
+    
+    @staticmethod
+    @tool(return_direct=True)
+    def desenhar_grafo():
 
         """ Desenha o grafo de importância das variáveis do modelo.
         Argumento: model deve ser um modelo treinado do AUTODCE-TS.
         Retorna a imagem do grafo em base64.
         """
-        importance, max_value = MyTools.get_importance(model)
-        variables = MyTools.get_variables(model)
-        arestas = MyTools.get_edges(importance, model)
+        
+        global model
+
+        if model.decomposition:
+            target_original = model.target
+            dfs_filtrados = {k: v for k, v in model.G_list.items() if "IMF" in k}
+            df_final = pd.concat(dfs_filtrados.values()).groupby(level=0).any()
+            df_final_filtrados = {k: v for k, v in df_final.items() if "IMF" in k}
+            df_final = df_final.drop(df_final.filter(like="IMF").columns, axis=1)
+            df_target = pd.concat(df_final_filtrados.values()).groupby(level=0).any()
+            df_final[model.target] = df_target.values
+            model.G_list[model.target] = df_final
+            keys = model.G_list.keys()
+            imf_keys = [k for k in keys if "IMF" in k]
+            print(imf_keys)
+
+            importancias_imf = []
+            for k in imf_keys:
+                model.target = k
+                imp = Tools.get_importance(model)
+                importancias_imf.append(Tools.renomear_imf_para_target(imp[0], target))
+
+            model.target = target_original
+            
+            importance, max_value = Tools.agrupar_dicts(model, importancias_imf)
+
+            importance = Tools.normalize_importance(importance)
+                
+        else:
+            importance, max_value = Tools.get_importance(model)
+
+        variables = Tools.get_variables(model)
+        arestas = Tools.get_edges(importance, model)
+
         G = nx.DiGraph()
         G.add_nodes_from(importance.keys())
         G.add_edges_from(arestas)
@@ -409,9 +488,10 @@ class Tools:
         ax.set_ylabel("Variables", fontsize=12)
         
         # Definir ticks e labels
-        space_lags = np.linspace(-0.15, 3.45, max_value+1)
+        space_lags = np.linspace(-0.15, 5.0, max_value+1)
         ax.set_xticks(space_lags)
-        ax.set_xticklabels(["t-3", "t-2", "t-1", "t"], fontsize=10)
+        # list_lags = make_time_labels(max_value+1)
+        ax.set_xticklabels([], fontsize=10)
         
         space_nodes = np.linspace(0.8, len(variables)+0.2, len(variables))
         ax.set_yticks(space_nodes)
@@ -419,12 +499,12 @@ class Tools:
 
         # Fixar limites dos eixos
         ax.set_xlim(-1, max_value+1)
-        ax.set_ylim(-0.3, len(variables)+0.4)
+        ax.set_ylim(-0.3, len(variables)+1)
 
         # Criar um eixo secundário do NetworkX
         ax_graph = fig.add_axes(ax.get_position(), frameon=False)
-        ax_graph.set_xlim(-1, max_value+1)
-        ax_graph.set_ylim(-0.3, len(variables)+0.4)
+        ax_graph.set_xlim(-1.20, max_value+2)
+        ax_graph.set_ylim(-0.3, len(variables)+1)
 
 
         labels = {n: n.rsplit(" ", 1)[0] for n in G.nodes()}
@@ -453,7 +533,7 @@ class Tools:
                                     marker='o', 
                                     linestyle='None',
                                     markersize=10,
-                                    label='Endogenous variable')
+                                    label='Endogenous variable at time t')
 
         ax.legend(handles=[endog_legend], 
                 loc='center left', 
@@ -462,8 +542,11 @@ class Tools:
         
         plt.savefig('grafo.png', bbox_inches='tight')
         plt.tight_layout()
+        # plt.show()
 
         # Salva imagem em buffer e converte para base64
+        import base64
+        import io
         buf = io.BytesIO()
         plt.savefig(buf, format="png")
         plt.close(fig)
