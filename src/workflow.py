@@ -1,15 +1,21 @@
 from typing_extensions import TypedDict
 from langgraph.graph import START, END, StateGraph
 from langgraph.prebuilt import ToolNode, tools_condition
+from langchain_core.messages import HumanMessage, AIMessage, BaseMessage
+from typing import List
+
 
 
 # Estados
 class State(TypedDict):
-    msg: str              # mensagem do usuário
+    msg: List[BaseMessage]  # lista de mensagens do tipo HumanMessage ou AIMessage
     step: str             # etapa atual do workflow
     log: str              # descrição da etapa executada (pensamento e ações do agente pandas)
-    tool_output: list     # saída das tools executadas
-    resumo: list          # histórico das etapas já resumidas.
+    tool_output: list      # saída das tools executadas
+    resumo: list           # histórico das etapas já resumidas. (list)
+    avaliacao: str         # feedback do avaliador: sim ou não
+    feedback: str         # feedback do avaliador
+
 
 
 # Implementação dos nós
@@ -27,20 +33,34 @@ def proxima_etapa(state: State):
 
 def resume_etapa(state: State):
     
-    return state
-
-def finaliza(state: State):
     
     return state
+
+
+def finaliza(state: State):
+    """Finaliza o workflow e retorna a história completa"""
+    return state["resumo"]
+
+
 
 # Nós de roteamento
 def roteador_avalia_etapa(state: State):
-
+    """Roteia para a mesma etapa ou vai para o resumo."""
+    avaliacao = state.get("avaliacao")
+    step = state.get("step", 1)
+    
+    if avaliacao['avaliacao'] == 'sim':
+        return "refazer"
     return 'resumir'
 
+
 def roteador_resume_etapa(state: State):
+    """Roteia para a próxima etapa ou finaliza."""
+    step = state.get("step", 1)
     
-    return 'final'
+    if step < 6:
+        return "proxima"
+    return "final"
 
 
 tools = []
@@ -79,6 +99,14 @@ builder.add_conditional_edges(
     }
 )
 builder.add_edge("proxima_etapa", "executa_etapa")
+builder.add_edge("finaliza", END)
+
+# Compilando o workflow
+graph = builder.compile() 
+
+
+
+
 builder.add_edge("finaliza", END)
 
 # Compilando o workflow
