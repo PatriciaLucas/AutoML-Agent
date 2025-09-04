@@ -1,5 +1,6 @@
 from langchain_community.chat_models import ChatDeepInfra
 from langchain_experimental.agents.agent_toolkits import create_pandas_dataframe_agent
+from langchain.agents import initialize_agent
 import pandas as pd
 
 
@@ -15,16 +16,25 @@ class Agent:
 
         if name == 'pandas':
             return create_pandas_dataframe_agent(
-            llm=self.llm,
-            df=pd.DataFrame(df),
-            verbose=True,
-            allow_dangerous_code=True,
-            return_intermediate_steps=True,
-            agent_type="zero-shot-react-description",
-            extra_tools=tools,
-            max_interations=10,
-            prefix=prefix,
-            sufix=sufix
-            )
-        else: # Para agentes avaliadores e resumidores
+                                                llm=self.llm,
+                                                df=df,
+                                                verbose=True,
+                                                allow_dangerous_code=True,
+                                                return_intermediate_steps=True,
+                                                agent_type="zero-shot-react-description",
+                                                handle_parsing_errors=True,
+                                                extra_tools=tools,
+                                                max_interations=10,
+                                                prefix=prefix,
+                                                sufix=sufix
+                                                )
+        elif name == 'react':
+            return initialize_agent(
+                                    tools=tools, 
+                                    llm=self.llm,
+                                    agent="zero-shot-react-description",
+                                    verbose=True
+                                    )
+        
+        else:
             return self.llm
