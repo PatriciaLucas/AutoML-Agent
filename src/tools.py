@@ -1,5 +1,5 @@
 from langchain.tools import tool
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from darts import TimeSeries
 from darts.dataprocessing.transformers import MissingValuesFiller
 from darts.utils.missing_values import fill_missing_values
@@ -18,15 +18,20 @@ import numpy as np
 import matplotlib.lines as mlines
 from typing import List
 import pickle
+from typing import List, Dict, Tuple
+
 
 class SchemaTools(BaseModel):
     coluna: str
 
+
 class SchemaAutoml(BaseModel):
     input: str
-   
+
+ 
 
 class Tools:
+
 
     @staticmethod
     @tool(args_schema=SchemaAutoml, return_direct=True)
@@ -37,15 +42,16 @@ class Tools:
         - target: nome da coluna a ser prevista.
         - step_ahead: número de passos à frente para prever.
         - max_lags: número máximo de defasagens a serem consideradas no modelo.
+        - decomposition: se True, aplica decomposição EMD antes da previsão.
         Retorna um DataFrame com as previsões.
         """
+        global df
+        
         # Extrair parâmetros com regex
         target = re.search(r'target\s*:\s*["\']?(\w+)["\']?', input).group(1)
         step_ahead = int(re.search(r'step_ahead\s*:\s*(\d+)', input).group(1))
         max_lags = int(re.search(r'max_lags\s*:\s*(\d+)', input).group(1))
         decomposition = re.search(r'decomposition\s*:\s*(\w+)', input).group(1).lower() == "true"
-
-        global df
 
         train, test = df.head(int(df.shape[0] - step_ahead)), df.tail(step_ahead)
 
@@ -55,7 +61,7 @@ class Tools:
             distributive_version=False,
             save_model=True,
             path_model='model',
-            decomposition=True,
+            decomposition=decomposition,
             max_lags=max_lags,
             test_size=0,
             optimize_hiperparams=True
@@ -82,15 +88,14 @@ class Tools:
 
     @staticmethod
     @tool(args_schema=SchemaTools, return_direct=True)
-    def impute_values_with_linear_method(coluna: str) -> pd.DataFrame:
+    def impute_values_with_linear_method(coluna: str) -> dict:
         """
         Imputa valores ausentes na coluna usando interpolação linear.
         Argumento: coluna deve conter o nome de uma coluna existente no DataFrame df.
 
         Retorna um DataFrame imputado.
         """
-        global df
-
+        df = df.to_dataframe()
         coluna = coluna.strip("'").strip('"')
         df.index = pd.to_datetime(df.index, errors="raise")
         series = TimeSeries.from_dataframe(df, fill_missing_dates=True, freq=None)
@@ -101,10 +106,10 @@ class Tools:
         else:
             series_filled = series
 
-        df = series_filled.to_dataframe()
+        df = series_filled.to_dataframe().to_dict()
         return df
     
-
+    @staticmethod
     @tool(args_schema=SchemaTools, return_direct=True)
     def impute_values_with_spline_method(coluna: str) -> pd.DataFrame:
         """
@@ -131,9 +136,10 @@ class Tools:
             )
         else:
             series_filled = series
-
+        df = series_filled.to_dataframe()
         return series_filled.to_dataframe()
 
+    @staticmethod
     @tool(args_schema=SchemaTools, return_direct=True)
     def impute_values_with_backfill_method(coluna: str) -> pd.DataFrame:
         """
@@ -150,6 +156,7 @@ class Tools:
 
         return df
 
+    @staticmethod
     @tool(args_schema=SchemaTools, return_direct=True)
     def impute_values_with_mean_method(coluna: str) -> pd.DataFrame:
         """
@@ -165,7 +172,7 @@ class Tools:
         return df
 
    
-
+    @staticmethod
     @tool(args_schema=SchemaTools, return_direct=True)
     def impute_values_with_nearest_method(coluna: str) -> pd.DataFrame:
         """
@@ -183,6 +190,7 @@ class Tools:
 
         return df
 
+    @staticmethod
     @tool(args_schema=SchemaTools)
     def EMD(coluna: str) -> pd.DataFrame:
         """Decompõe uma série temporal usando o método Empirical Mode Decomposition (EMD).
@@ -197,6 +205,7 @@ class Tools:
 
         return imf
 
+    @staticmethod
     @tool(args_schema=SchemaTools)
     def testar_estacionariedade(coluna: str) -> str:
         """Determina se uma série temporal é estacionária.
@@ -234,7 +243,7 @@ class Tools:
             return f"Erro ao aplicar os testes: {str(e)}"
 
 
-
+    @staticmethod
     @tool(args_schema=SchemaTools, return_direct=True)
     def plot_column_base64(coluna: str) -> str:
         """
@@ -261,6 +270,7 @@ class Tools:
         img_base64 = base64.b64encode(buf.read()).decode("utf-8")
         return img_base64
     
+    @staticmethod
     @tool(return_direct=True)
     def plot_real_vs_pred() -> str:
         """
@@ -304,6 +314,7 @@ class Tools:
         img_base64 = base64.b64encode(buf.read()).decode("utf-8")
         return img_base64
 
+    @staticmethod
     @tool(args_schema=SchemaTools, return_direct=True)
     def plot_imf(coluna: str) -> str:
         """
@@ -545,8 +556,6 @@ class Tools:
         # plt.show()
 
         # Salva imagem em buffer e converte para base64
-        import base64
-        import io
         buf = io.BytesIO()
         plt.savefig(buf, format="png")
         plt.close(fig)
