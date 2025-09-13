@@ -3,6 +3,7 @@ from langgraph.graph import START, END, StateGraph
 from langgraph.prebuilt import ToolNode, tools_condition
 from langchain_core.messages import HumanMessage, AIMessage, BaseMessage
 from typing import List
+import json
 
 
 
@@ -24,7 +25,20 @@ def executa_etapa(state: State):
     return state
 
 def avalia_etapa(state: State):
-    
+    agente_resumidor = Agent("meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8")
+
+    prompt_avalia = Prompts.get_prompt('Avaliação', state)
+    out = Agent.llm.invoke(prompt_avalia)
+
+    json_out = json.loads(out)
+
+    state["avaliacao"] = str(json_out['avaliacao'])
+    state['feedback'] = str(json_out['feedback'])
+
+    if(state[avaliacao"] == '0' AND state.step == oldStep):
+        count++
+       
+    oldStep = state.step
     return state
 
 def proxima_etapa(state: State):
