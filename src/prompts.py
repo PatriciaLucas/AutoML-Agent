@@ -1,17 +1,16 @@
-
 class Prompts:
 
     def get_prompt(name: str, **kwargs) -> str:
         match name:
             case 'Etapa 1': # Imputação de valores faltantes:
-                user_msg = kwargs.get("user_msg", "")
-                df = kwargs.get("df", "")
                 #Verificar a possibilidade de relembrar que o agente é um assistente de análise de séries temporais, caso a resposta não seja satisfatória
                 #Vamos testar se listar as tools contribui para a resposta do agente 
-                prompt = f"""Agora foque em imputação de valores faltantes.
+                prompt = f"""Você é um assistente de pré-processamento de dados de séries temporais. 
+                Foque em imputação de valores faltantes.
                 Verifique se há valores faltantes em todo o dataframe.
                 Caso haja valores faltantes, realize a imputação utilizando a tool mais apropriada.
-                Use o formato: {{df.to_dict(), 'ETO'}} para qualquer tool de imputação."""
+                Use o formato: {{nome da coluna}} para qualquer tool, sem aspas.
+                """
 
 
             case 'Etapa 2': # Previsão:
@@ -21,27 +20,28 @@ class Prompts:
                 O número máximo de defasagens e o uso da decomposição deve ser definido por você.
                 O número máximo de defasagens deve ser definido de forma a equilibrar a precisão e o custo computacional, 
                 então escolha valores entre 1 e 30.
-                Para chamar a tool use o formato: {{target: 'nome da coluna', step_ahead: 5, max_lags: 15, decomposition: true}}, 
+                Para chamar a tool automl use o formato: {{target: 'nome da coluna', step_ahead: 5, max_lags: 15, decomposition: true}}, 
                 não use aspas nos nomes dos parâmetros.
                 """
 
-            case 'Etapa 4': # Visualização real x previsto
-                target = state.get("target", "")
+            case 'Etapa 3': # Visualização real x previsto
+                
                 prompt = f'''Foque na tarefa de visualização de dados.
-                 Agora df contém os valores previstos e reais.
-                 Gere a figura na Base64 que contenha o gráfico comparando os valores reais e previstos da coluna {target}.
+                 O dataframe contém os valores previstos e reais.
+                 Gere a figura na Base64 que contenha o gráfico comparando os valores reais e previstos.
                  
                  '''
 
-            case 'Etapa 5': # Visualização grafo causal:
-                prompt = f"""Use a tool desenhar_grafo para gerar o grafo de importância das variáveis do modelo.
+            case 'Etapa 4': # Visualização grafo causal:
+                modelo = kwargs.get("modelo", "")
+                prompt = f"""Use a tool desenhar_grafo para gerar o grafo de importância das variáveis do modelo {modelo}.
                 """
 
 
             case 'Avaliação': # Recebe as ações do Agente Pandas e solicita ao Agente Avaliador que aprove ou não essas ações de acordo com a etapa que foi solicitada.
                 
-                #action = 
-                #step =
+                action = ""
+                step = ""
                 prompt = f"""Você é um avaliador de ações em um processo de análise de series temporais. Seu trabalho é decidir se uma ação deve ser aplicada ou não em uma determinada etapa. 
                             Responda apenas Sim ou Não. 
                             A ação {actions} deve ser executada para a etapa {etapa}?"""
@@ -91,7 +91,6 @@ class Prompts:
                     Outputs:
                     {outputs}
                     """.strip()
-
         
 
         return prompt
