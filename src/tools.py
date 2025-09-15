@@ -32,7 +32,6 @@ class SchemaAutoml(BaseModel):
 
 class Tools:
 
-
     @staticmethod
     @tool(args_schema=SchemaAutoml, return_direct=True)
     def automl(input: str) -> pd.DataFrame:
@@ -95,7 +94,8 @@ class Tools:
 
         Retorna um DataFrame imputado.
         """
-        df = df.to_dataframe()
+        global df
+        
         coluna = coluna.strip("'").strip('"')
         df.index = pd.to_datetime(df.index, errors="raise")
         series = TimeSeries.from_dataframe(df, fill_missing_dates=True, freq=None)
@@ -424,6 +424,38 @@ class Tools:
 
         return result, max_lags
     
+
+    @staticmethod
+    def normalize_importance(data: Dict[str, List[float]]) -> Dict[str, List[float]]:
+        """
+        Normaliza o primeiro valor de cada lista em um dicionário,
+        mantendo o segundo valor inalterado. Valores iguais a -1 não são normalizados.
+
+        Args:
+            data (Dict[str, List[float]]): Dicionário de entrada com listas [valor, índice].
+
+        Returns:
+            Dict[str, List[float]]: Dicionário com valores normalizados.
+        """
+        # extrair valores que não são -1
+        valores = [v[0] for v in data.values() if v[0] != -1]
+
+        if not valores:  # evita divisão por zero
+            return data
+
+        min_val = min(valores)
+        max_val = max(valores)
+
+        # normalização linear
+        normalized = {}
+        for k, v in data.items():
+            if v[0] == -1:
+                normalized[k] = v
+            else:
+                norm = (v[0] - min_val) / (max_val - min_val)
+                normalized[k] = [norm, v[1]]
+        return normalized
+    
     @staticmethod
     @tool(return_direct=True)
     def desenhar_grafo():
@@ -433,38 +465,38 @@ class Tools:
         Retorna a imagem do grafo em base64.
         """
         
-        global model
+        global modelo
 
-        if model.decomposition:
-            target_original = model.target
-            dfs_filtrados = {k: v for k, v in model.G_list.items() if "IMF" in k}
+        if modelo.decomposition:
+            target_original = modelo.target
+            dfs_filtrados = {k: v for k, v in modelo.G_list.items() if "IMF" in k}
             df_final = pd.concat(dfs_filtrados.values()).groupby(level=0).any()
             df_final_filtrados = {k: v for k, v in df_final.items() if "IMF" in k}
             df_final = df_final.drop(df_final.filter(like="IMF").columns, axis=1)
             df_target = pd.concat(df_final_filtrados.values()).groupby(level=0).any()
-            df_final[model.target] = df_target.values
-            model.G_list[model.target] = df_final
-            keys = model.G_list.keys()
+            df_final[modelo.target] = df_target.values
+            modelo.G_list[modelo.target] = df_final
+            keys = modelo.G_list.keys()
             imf_keys = [k for k in keys if "IMF" in k]
             print(imf_keys)
 
             importancias_imf = []
             for k in imf_keys:
-                model.target = k
-                imp = Tools.get_importance(model)
-                importancias_imf.append(Tools.renomear_imf_para_target(imp[0], target))
+                modelo.target = k
+                imp = Tools.get_importance(modelo)
+                importancias_imf.append(Tools.renomear_imf_para_target(imp[0], target_original))
 
-            model.target = target_original
+            modelo.target = target_original
             
-            importance, max_value = Tools.agrupar_dicts(model, importancias_imf)
+            importance, max_value = Tools.agrupar_dicts(modelo, importancias_imf)
 
             importance = Tools.normalize_importance(importance)
                 
         else:
-            importance, max_value = Tools.get_importance(model)
+            importance, max_value = Tools.get_importance(modelo)
 
-        variables = Tools.get_variables(model)
-        arestas = Tools.get_edges(importance, model)
+        variables = Tools.get_variables(modelo)
+        arestas = Tools.get_edges(importance, modelo)
 
         G = nx.DiGraph()
         G.add_nodes_from(importance.keys())
@@ -556,6 +588,8 @@ class Tools:
         # plt.show()
 
         # Salva imagem em buffer e converte para base64
+        import base64
+        import io
         buf = io.BytesIO()
         plt.savefig(buf, format="png")
         plt.close(fig)
