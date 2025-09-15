@@ -3,33 +3,221 @@ from langgraph.graph import START, END, StateGraph
 from langgraph.prebuilt import ToolNode, tools_condition
 from langchain_core.messages import HumanMessage, AIMessage, BaseMessage
 from typing import List
+import pandas as pd
+from langchain_experimental.tools.python.tool import PythonAstREPLTool
+import os
+from dotenv import load_dotenv 
+from typing import NotRequired
+import pickle
+import base64
 
+from tools import Tools
+import tools
+from agent import Agent
+from prompts import Prompts
+import utils
+
+
+
+load_dotenv()
+API_KEY = os.getenv("API_KEY")
+
+# Definição das tools
+tools_list = [Tools.automl, Tools.plot_real_vs_pred, Tools.testar_estacionariedade,
+            Tools.desenhar_grafo, Tools.impute_values_with_backfill_method,
+            Tools.impute_values_with_mean_method, Tools.impute_values_with_nearest_method, 
+            Tools.impute_values_with_linear_method,
+            Tools.impute_values_with_spline_method]
 
 
 # Estados
 class State(TypedDict):
     msg: List[BaseMessage]  # lista de mensagens do tipo HumanMessage ou AIMessage
-    step: str             # etapa atual do workflow
-    log: str              # descrição da etapa executada (pensamento e ações do agente pandas)
-    tool_output: list      # saída das tools executadas
-    resumo: list           # histórico das etapas já resumidas. (list)
-    avaliacao: str         # feedback do avaliador: sim ou não
-    feedback: str         # feedback do avaliador
+    step: NotRequired[int]             # etapa atual do workflow
+    log: NotRequired[str]              # descrição da etapa executada (pensamento e ações do agente pandas)
+    tool_output: NotRequired[list]      # saída das tools executadas
+    resumo: NotRequired[list]           # histórico das etapas já resumidas. (list)
+    avaliacao: NotRequired[str]         # feedback do avaliador: sim ou não
+    feedback: NotRequired[str]         # feedback do avaliador
+    dataframe: str        # path do dataframe a ser analisado
+
+# Inicialização do dataframe e o modelo
+df = pd.DataFrame()
+modelo = None
 
 
+# Definição dos modelos e agentes
+model = "meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8"
+# agente_pandas = Agent(model).build('pandas', df, tools_list)
+# agente_react  = Agent(model).build('react')
+# agente_llm   = Agent(model).build('llm')
 
 # Implementação dos nós
 def executa_etapa(state: State):
+    global df, modelo, model
+    # Pega a etapa atual
+    step = state.get("step", 1)
+    print(f">>> Entrou no nó executa_etapa - step {step}", flush=True)
 
-    return state
+    if step == 1:
+        # Carregar o dataframe
+        df = pd.read_csv(state["dataframe"]).drop(columns=['Date']).head(5000)
+        df = utils.remover_valores_aleatorios(df, coluna="ETO", proporcao=0.1)
+        tools.df = df
+
+        # Cria o agente pandas
+        agente_pandas = Agent(model).build('pandas', df, tools_list)
+
+        # Pega o prompt da etapa 1 e gera a mensagem para o agente pandas
+        prompt = Prompts.get_prompt('Etapa 1')
+        messages = [HumanMessage(content=prompt)]
+
+        # Executa o agente pandas e extrai os logs e outputs das tools
+        agent_output = agente_pandas.invoke(messages)
+
+        intermediate_steps = agent_output.get("intermediate_steps", [])
+
+        logs = [action_log.log for action_log, _ in intermediate_steps]
+        
+        tool_outputs = {}
+        for action_log, observation in intermediate_steps:
+            tool_name = getattr(action_log, "tool", None)
+            output = utils.serialize_output(observation)
+            tool_outputs[tool_name] = output   # chave = nome da tool, valor = output
+        
+        tool_output_final = next((v for k, v in tool_outputs.items() if "imput" in k), None)
+        novo_df = pd.DataFrame(tool_output_final)
+
+        # Atualiza o dataframe global e o dataframe nas tools
+        df = novo_df
+        tools.df = df
+
+        new_messages = state["msg"] + [AIMessage(content=logs)]
+
+
+    elif step == 2:
+        # Cria o agente pandas
+        agente_pandas = Agent(model).build('pandas', df, tools_list)
+
+        # Pega a última mensagem humana para compor o prompt da etapa 2.
+        last_human_message = None
+        for msg in reversed(state["msg"]):
+            # caso 1: já é HumanMessage
+            if isinstance(msg, HumanMessage):
+                last_human_message = msg.content
+                break
+            # caso 2: veio como dict serializado
+            if isinstance(msg, dict) and msg.get("type") == "human":
+                last_human_message = msg.get("content")
+                break
+
+        # Pega o prompt da etapa 2 e gera a mensagem para o agente pandas
+        prompt = Prompts.get_prompt('Etapa 2', user_msg = last_human_message)
+        messages = [HumanMessage(content=prompt)]
+
+        # Executa o agente pandas e extrai os logs e outputs das tools
+        agent_output = agente_pandas.invoke(messages)
+
+        intermediate_steps = agent_output.get("intermediate_steps", [])
+
+        logs = [action_log.log for action_log, _ in intermediate_steps]
+        
+        tool_outputs = {}
+        for action_log, observation in intermediate_steps:
+            tool_name = getattr(action_log, "tool", None)
+            output = utils.serialize_output(observation)
+            tool_outputs[tool_name] = output   # chave = nome da tool, valor = output
+        
+        # Pega a saída da tool automl
+        dict_automl = next((v for k, v in tool_outputs.items() if "automl" in k), None)
+        modelo = pickle.loads(base64.b64decode(dict_automl['modelo']))
+        tool_output_final = dict_automl['predicoes']
+        novo_df = pd.DataFrame(dict_automl['predicoes'])
+
+        # Para testar sem executar o automl
+        # tool_output_final = {'predicoes': {'real': {0: 5.8, 1: 5.5, 2: 5.8, 3: 5.8, 4: 5.6},
+        # 'previsto': {0: 5.086650089557475,
+        # 1: 4.981711405165194,
+        # 2: 4.960316273071086,
+        # 3: 4.714007595126947,
+        # 4: 4.5939236324712045}}}
+        # novo_df = pd.DataFrame(tool_output_final["predicoes"])
+        # modelo = pickle.load(open("model.pickle", 'rb'))
+        # logs = ""
+        # new_messages = state["msg"] + messages
+        
+        # Atualiza o dataframe global e o dataframe nas tools
+        df = novo_df
+        tools.df = df
+        tools.modelo = modelo
+
+        new_messages = state["msg"] + [AIMessage(content=logs)]
+
+    elif step == 3:
+        # Cria o agente pandas
+        agente_pandas = Agent(model).build('pandas', df, tools_list)
+
+        # Pega o prompt da etapa 2 e gera a mensagem para o agente pandas
+        prompt = Prompts.get_prompt('Etapa 3')
+        messages = [HumanMessage(content=prompt)]
+
+        # Executa o agente pandas e extrai os logs e outputs das tools
+        agent_output = agente_pandas.invoke(messages)
+
+        intermediate_steps = agent_output.get("intermediate_steps", [])
+
+        logs = [action_log.log for action_log, _ in intermediate_steps]
+        
+        tool_outputs = {}
+        for action_log, observation in intermediate_steps:
+            tool_name = getattr(action_log, "tool", None)
+            output = utils.serialize_output(observation)
+            tool_outputs[tool_name] = output   # chave = nome da tool, valor = output
+        
+        # Pega a saída da tool plot_real_vs_pred
+        tool_output_final = next((v for k, v in tool_outputs.items() if "plot_real_vs_pred" in k), None)
+
+        new_messages = state["msg"] + [AIMessage(content=logs)]
+
+    elif step == 4:
+        # Cria o agente pandas
+        agente_pandas = Agent(model).build('pandas', df, tools_list)
+
+        # Pega o prompt da etapa 2 e gera a mensagem para o agente pandas
+        prompt = Prompts.get_prompt('Etapa 4', modelo = modelo)
+        messages = [HumanMessage(content=prompt)]
+
+        # Executa o agente pandas e extrai os logs e outputs das tools
+        agent_output = agente_pandas.invoke(messages)
+
+        intermediate_steps = agent_output.get("intermediate_steps", [])
+
+        logs = [action_log.log for action_log, _ in intermediate_steps]
+        
+        tool_outputs = {}
+        for action_log, observation in intermediate_steps:
+            tool_name = getattr(action_log, "tool", None)
+            output = utils.serialize_output(observation)
+            tool_outputs[tool_name] = output   # chave = nome da tool, valor = output
+        
+        # Pega a saída da tool desenhar_grafo
+        tool_output_final = next((v for k, v in tool_outputs.items() if "desenhar_grafo" in k), None)
+
+        new_messages = state["msg"] + [AIMessage(content=logs)]
+
+    return {
+                "messages": new_messages,
+                "log": logs,
+                "tool_output": state.get("tool_output", []) + [tool_output_final]
+            }
 
 def avalia_etapa(state: State):
-    
-    return state
+    avaliacao = 'sim'
+    return {"avaliacao": avaliacao}
 
 def proxima_etapa(state: State):
-
-    return
+    step = state.get("step") + 1
+    return {"step": step}
 
 def resume_etapa(state: State):
     
@@ -39,7 +227,7 @@ def resume_etapa(state: State):
 
 def finaliza(state: State):
     """Finaliza o workflow e retorna a história completa"""
-    return state["resumo"]
+    return state
 
 
 
@@ -47,23 +235,22 @@ def finaliza(state: State):
 def roteador_avalia_etapa(state: State):
     """Roteia para a mesma etapa ou vai para o resumo."""
     avaliacao = state.get("avaliacao")
-    step = state.get("step", 1)
-    
-    if avaliacao['avaliacao'] == 'sim':
+    # step = state.get("step", 1)
+
+    if avaliacao == 'não':
         return "refazer"
-    return 'resumir'
+    else:
+        return 'resumir'
 
 
 def roteador_resume_etapa(state: State):
     """Roteia para a próxima etapa ou finaliza."""
     step = state.get("step", 1)
-    
-    if step < 6:
+    print(step)
+    if step < 4:
         return "proxima"
-    return "final"
-
-
-tools = []
+    else:
+        return "final"
 
 
 # Construção do grafo
@@ -71,7 +258,7 @@ builder = StateGraph(State)
 
 # Adicionando nós
 builder.add_node("executa_etapa", executa_etapa)
-builder.add_node("tools", ToolNode(tools=tools))
+builder.add_node("tools", ToolNode(tools=tools_list))
 builder.add_node("avalia_etapa", avalia_etapa)
 builder.add_node("proxima_etapa", proxima_etapa)
 builder.add_node("resume_etapa", resume_etapa)
@@ -104,10 +291,19 @@ builder.add_edge("finaliza", END)
 # Compilando o workflow
 graph = builder.compile() 
 
+# Desabilite o app.invoke para executar com o langsmith
+final_state = graph.invoke(
+    {"msg": [HumanMessage(content="Faça a previsão de 5 passos à frente para a coluna 'ETO'.")],
+    'step': 1,
+    "log": "",
+    "tool_output": [],
+    "resumo": [],
+    "avaliacao": "sim",
+    "feedback": "",
+    "dataframe": 'CLIMATIC_2.csv'
+    },
+    config={"configurable": {"api_key": API_KEY, "thread_id": 42}}
+)
 
-
-
-builder.add_edge("finaliza", END)
-
-# Compilando o workflow
-graph = builder.compile() 
+# Show the final response
+print(final_state)
