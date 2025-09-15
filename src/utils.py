@@ -19,3 +19,16 @@ def remover_valores_aleatorios(df, coluna="Close", proporcao=0.1):
     pd.DataFrame(df_modificado, columns=[coluna])
 
     return df_modificado
+
+
+def serialize_output(output):
+    if isinstance(output, np.generic):
+        return output.item()
+    elif isinstance(output, pd.DataFrame):
+        return output.reset_index().to_dict(orient="records")
+    elif isinstance(output, pd.Series):
+        return output.to_dict()
+    elif isinstance(output, (list, dict, str, int, float, bool)) or output is None:
+        return output
+    else:
+        return str(output)
