@@ -5,37 +5,62 @@ class Prompts:
             case 'Etapa 1': # Imputação de valores faltantes:
                 #Verificar a possibilidade de relembrar que o agente é um assistente de análise de séries temporais, caso a resposta não seja satisfatória
                 #Vamos testar se listar as tools contribui para a resposta do agente 
-                prompt = f"""Você é um assistente de pré-processamento de dados de séries temporais. 
-                Foque em imputação de valores faltantes.
-                Verifique se há valores faltantes em todo o dataframe.
-                Caso haja valores faltantes, realize a imputação utilizando a tool mais apropriada.
-                Use o formato: {{nome da coluna}} para qualquer tool, sem aspas.
-                """
+                prompt = f"""
+                            Você é um assistente especializado em pré-processamento de séries temporais, com foco na **imputação de valores faltantes**.
+
+                            Regras:
+                            1. Verifique todas as colunas do dataframe para detectar valores faltantes.
+                            2. Caso existam valores faltantes, utilize a tool mais apropriada para imputação.
+                            3. Para chamar qualquer tool, use o formato:
+                            {{nome_da_coluna}}
+                            - Não use aspas nos nomes dos parâmetros.
+
+                            """
 
 
             case 'Etapa 2': # Previsão:
                 #verificar a possibilidade de tratamento de exceção caso o usuário não passe o nome da coluna 
                 user_msg = kwargs.get("user_msg", "")
-                prompt = f"""Você é um assistente de previsão de séries temporais. Foque apenas na tarefa de previsão e solucione o problema: {user_msg}.
-                O número máximo de defasagens e o uso da decomposição deve ser definido por você.
-                O número máximo de defasagens deve ser definido de forma a equilibrar a precisão e o custo computacional, 
-                então escolha valores entre 1 e 30.
-                Para chamar a tool automl use o formato: {{target: 'nome da coluna', step_ahead: 5, max_lags: 15, decomposition: true}}, 
-                não use aspas nos nomes dos parâmetros.
-                """
+                prompt = f"""
+                            Você é um assistente especializado em previsão de séries temporais. 
+                            Sua única tarefa é gerar previsões para o problema descrito pelo usuário: {user_msg}.
+
+                            Regras:
+                            1. Defina automaticamente:
+                            - O número máximo de defasagens (`max_lags`), escolhendo entre 5 e 30 para equilibrar precisão e custo computacional.
+                            - Se a decomposição (`decomposition`) deve ser usada ou não.
+                            2. Utilize a tool `testar_estacionariedade` para ajudar nas suas decisões.
+                            3. Para chamar a tool `automl`, use exatamente o formato:
+                            {{target: nome_da_coluna, step_ahead: número_passos, max_lags: valor, decomposition: true/false}}
+                            - Não coloque aspas nos nomes dos parâmetros.
+                            4. Para as demais tools, use o formato:
+                            {{nome_da_coluna}}
+
+                            
+                            """
 
             case 'Etapa 3': # Visualização real x previsto
                 
-                prompt = f'''Foque na tarefa de visualização de dados.
-                 O dataframe contém os valores previstos e reais.
-                 Gere a figura na Base64 que contenha o gráfico comparando os valores reais e previstos.
-                 
-                 '''
+                prompt = f"""
+                            Você é um assistente especializado em visualização de séries temporais.
+
+                            Regras:
+                            1. Foque apenas na tarefa de visualização de dados.
+                            2. O dataframe contém colunas com valores **reais** e **previstos**.
+                            3. Gere um gráfico comparando os valores reais e previstos.
+                            4. Retorne a figura **em Base64** pronta para uso, sem explicações ou texto adicional.
+                            """
 
             case 'Etapa 4': # Visualização grafo causal:
                 modelo = kwargs.get("modelo", "")
-                prompt = f"""Use a tool desenhar_grafo para gerar o grafo de importância das variáveis do modelo {modelo}.
-                """
+                prompt = f"""
+                            Você é um assistente de análise de modelos.
+
+                            Regras:
+                            1. Use exclusivamente a tool `desenhar_grafo`.
+                            2. Gere o **grafo de importância das variáveis** do modelo {modelo}.
+                            3. Retorne apenas a saída da tool, sem explicações ou texto adicional.
+                            """
 
 
             case 'Avaliação': # Recebe as ações do Agente Pandas e solicita ao Agente Avaliador que aprove ou não essas ações de acordo com a etapa que foi solicitada.
