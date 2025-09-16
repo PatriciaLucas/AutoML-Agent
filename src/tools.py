@@ -67,7 +67,11 @@ class Tools:
         )
         model_automl.fit(train, target)
 
-        forecast = model_automl.predict_ahead(step_ahead=step_ahead)[0]
+        if decomposition:
+            forecast = model_automl.predict_ahead(step_ahead=step_ahead)[0]
+        else:
+            forecast = model_automl.predict_ahead_multivariate(step_ahead=step_ahead)[target]
+            
         real = test[target]
 
         output = pd.concat([real.reset_index(drop=True), forecast.reset_index(drop=True)], axis=1)
