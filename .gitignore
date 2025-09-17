@@ -1,0 +1,4 @@
+src/venv/
+src/.venv/
+src/__pycache__/
+src/Climatic_2.csv

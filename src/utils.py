@@ -32,3 +32,19 @@ def serialize_output(output):
         return output
     else:
         return str(output)
+
+def to_jsonable(x):
+    import numpy as np, pandas as pd
+    from datetime import date, datetime
+    from pathlib import Path
+    from enum import Enum
+    if isinstance(x, (np.bool_, np.number)): return x.item()
+    if isinstance(x, np.ndarray):            return x.tolist()
+    if isinstance(x, pd.DataFrame):          return x.to_dict(orient="records")
+    if isinstance(x, pd.Series):             return x.to_list()
+    if isinstance(x, (set, tuple)):          return [to_jsonable(v) for v in x]
+    if isinstance(x, (datetime, date)):      return x.isoformat()
+    if isinstance(x, (Path, Enum)):          return str(x)
+    if isinstance(x, dict):                  return {str(k): to_jsonable(v) for k, v in x.items()}
+    if isinstance(x, list):                  return [to_jsonable(v) for v in x]
+    return x
