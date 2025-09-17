@@ -11,6 +11,7 @@ from dotenv import load_dotenv
 from typing import NotRequired
 import pickle
 import base64
+import json
 
 from tools import Tools
 import tools
@@ -55,6 +56,7 @@ class State(TypedDict):
     resumos: NotRequired[list]
     avaliacao: NotRequired[str]
     feedback: NotRequired[str]
+    avaliador_count: NotRequired[int]
     dataframe: str
                    # path do dataframe a ser analisado
 
@@ -66,10 +68,9 @@ modelo = None
 # Definição dos modelos e agentes
 model = "meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8"
 agente_pandas = Agent(model).build('pandas', df, tools_list)
-repl = next(t for t in agente_pandas.tools if isinstance(t, PythonAstREPLTool))
+repl = next(t for t in agente_pandas.tools if isinstance(t, PythonAstREPLTool)) # pega a tool REPL para atualizar o dataframe no agente pandas
 
-# agente_react  = Agent(model).build('react', tools=tools_list)
-# agente_llm   = Agent(model).build('llm')
+agente_llm   = Agent(model).build('llm')
 
 # Implementação dos nós
 def executa_etapa(state: State):
@@ -81,8 +82,8 @@ def executa_etapa(state: State):
     try:
         if step == 1:
             # Carregar o dataframe
-            df = pd.read_csv(state["dataframe"]).drop(columns=['Date']).head(2000)
-            df = utils.remover_valores_aleatorios(df, coluna="Power", proporcao=0.01)
+            df = pd.read_csv(state["dataframe"]).drop(columns=['Date']).head(1000)
+            df = utils.remover_valores_aleatorios(df, coluna="ETO", proporcao=0.01)
             repl.locals["df"] = df
             tools.df = df
 
@@ -134,17 +135,17 @@ def executa_etapa(state: State):
             messages = [HumanMessage(content=prompt)]
 
             # Executa o agente pandas e extrai os logs e outputs das tools
-            agent_output = agente_pandas.invoke(messages)
+            # agent_output = agente_pandas.invoke(messages)
 
-            intermediate_steps = agent_output.get("intermediate_steps", [])
+            # intermediate_steps = agent_output.get("intermediate_steps", [])
 
-            logs = [action_log.log for action_log, _ in intermediate_steps]
+            # logs = [action_log.log for action_log, _ in intermediate_steps]
             
-            tool_outputs = {}
-            for action_log, observation in intermediate_steps:
-                tool_name = getattr(action_log, "tool", None)
-                output = utils.serialize_output(observation)
-                tool_outputs[tool_name] = output   # chave = nome da tool, valor = output
+            # tool_outputs = {}
+            # for action_log, observation in intermediate_steps:
+            #     tool_name = getattr(action_log, "tool", None)
+            #     output = utils.serialize_output(observation)
+            #     tool_outputs[tool_name] = output   # chave = nome da tool, valor = output
             
             # Pega a saída da tool automl
             dict_automl = next((v for k, v in tool_outputs.items() if "automl" in k), None)
@@ -232,12 +233,42 @@ def executa_etapa(state: State):
         }
 
 def avalia_etapa(state: State):
-    avaliacao = 'sim'
-    return {"avaliacao": avaliacao}
+    print(">>> Entrou no nó avalia_etapa", flush=True)
+    global agente_llm
+    
+    prompt_avalia = Prompts.get_prompt('Avaliação')
+    out = agente_llm.invoke(prompt_avalia)
+
+    json_out = json.loads(out.content)
+
+    avaliacao = json_out['avaliacao']
+    feedback = json_out['feedback']
+
+    if avaliacao == "não":
+        state['avaliador_count'] = state['avaliador_count'] + 1
+
+    if state['avaliador_count'] > 4:
+        avaliacao = "sim"
+        feedback = ""
+
+        state['avaliador_count'] = 0
+
+    print("Avaliação: " + avaliacao)
+    print("Feedback: " + feedback)
+    
+    state["avaliacao"] = avaliacao
+    state['feedback'] = feedback
+
+    if avaliacao == "sim":
+        state['feedback'] = ""
+    
+    return state
+
 
 def proxima_etapa(state: State):
     step = state.get("step") + 1
     return {"step": step}
+
 
 def resume_etapa(state: State):
     print(">>> Entrou no nó resume_etapa", flush=True)
@@ -395,6 +426,7 @@ final_state = graph.invoke(
         "resumos": [],          # (padronize plural aqui também)
         "avaliacao": "sim",
         "feedback": "",
+        "avaliador_count": 0, 
         "dataframe": "https://raw.githubusercontent.com/PatriciaLucas/AutoML/refs/heads/main/Datasets/ENERGY_1.csv",
     },
     config={"configurable": {"api_key": API_KEY, "thread_id": 42}},
