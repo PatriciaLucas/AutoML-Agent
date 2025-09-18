@@ -2,14 +2,22 @@ from langchain_community.chat_models import ChatDeepInfra
 from langchain_experimental.agents.agent_toolkits import create_pandas_dataframe_agent
 from langchain.agents import initialize_agent
 import pandas as pd
+from dotenv import load_dotenv
+import os
 
+# Defina sua chave de acesso 
+load_dotenv()
+API_KEY = os.getenv("API_KEY")
 
 class Agent:
-    def __init__(self, model):
+    def __init__(self, model, max_tokens=256):
 
         self.llm = ChatDeepInfra(
             model=model,
-            temperature=0
+            temperature=0,
+            top_k = 1,
+            max_tokens = max_tokens,
+            deepinfra_api_token=API_KEY
         )
 
     def build(self, name, df=None, tools=None, prefix = None, sufix = None):
