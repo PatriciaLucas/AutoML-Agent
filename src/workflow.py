@@ -19,22 +19,7 @@ from agent import Agent
 from prompts import Prompts
 import utils
 
-def to_jsonable(x):
-    import numpy as np, pandas as pd
-    from datetime import date, datetime
-    from pathlib import Path
-    from enum import Enum
 
-    if isinstance(x, (np.bool_, np.number)): return x.item()
-    if isinstance(x, np.ndarray):            return x.tolist()
-    if isinstance(x, pd.DataFrame):          return x.to_dict(orient="records")
-    if isinstance(x, pd.Series):             return x.to_list()
-    if isinstance(x, (set, tuple)):          return [to_jsonable(v) for v in x]
-    if isinstance(x, (datetime, date)):      return x.isoformat()
-    if isinstance(x, (Path, Enum)):          return str(x)
-    if isinstance(x, dict):                  return {str(k): to_jsonable(v) for k, v in x.items()}
-    if isinstance(x, list):                  return [to_jsonable(v) for v in x]
-    return x
 
 load_dotenv()
 API_KEY = os.getenv("API_KEY")
@@ -49,28 +34,31 @@ tools_list = [Tools.automl, Tools.plot_real_vs_pred, Tools.testar_estacionarieda
 
 # Estados
 class State(TypedDict):
-    messages: List[BaseMessage]
-    step: NotRequired[int]
-    log: NotRequired[str]
-    tool_output: NotRequired[list]
-    resumos: NotRequired[list]
-    avaliacao: NotRequired[str]
-    feedback: NotRequired[str]
-    avaliador_count: NotRequired[int]
-    dataframe: str
-                   # path do dataframe a ser analisado
+    msg: List[BaseMessage]             # lista de mensagens do tipo HumanMessage ou AIMessage
+    step: NotRequired[int]             # etapa atual do workflow
+    log: NotRequired[str]              # descrição da etapa executada (pensamento e ações do agente pandas)
+    tool_output: NotRequired[list]     # saída das tools executadas
+    resumos: NotRequired[list]          # histórico das etapas já resumidas. (list)
+    avaliacao: NotRequired[str]        # feedback do avaliador: sim ou não
+    feedback: NotRequired[str]         # feedback do avaliador
+    dataframe: str                     # path do dataframe a ser analisado
+    avaliador_count: int               # contador de avaliações negativas seguidas
 
 # Inicialização do dataframe e o modelo
 df = pd.DataFrame()
 modelo = None
 
 
-# Definição dos modelos e agentes
+# Definição dos modelos
 model = "meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8"
+
+# Definição do agente pandas
 agente_pandas = Agent(model).build('pandas', df, tools_list)
 repl = next(t for t in agente_pandas.tools if isinstance(t, PythonAstREPLTool)) # pega a tool REPL para atualizar o dataframe no agente pandas
 
-agente_llm   = Agent(model).build('llm')
+# Definição do agente avaliador e resumidor
+max_tokens = 500
+agente_llm   = Agent(model, max_tokens).build('llm')
 
 # Implementação dos nós
 def executa_etapa(state: State):
@@ -82,7 +70,7 @@ def executa_etapa(state: State):
     try:
         if step == 1:
             # Carregar o dataframe
-            df = pd.read_csv(state["dataframe"]).drop(columns=['Date']).head(1000)
+            df = pd.read_csv(state["dataframe"]).drop(columns=['Date']).head(500)
             df = utils.remover_valores_aleatorios(df, coluna="ETO", proporcao=0.01)
             repl.locals["df"] = df
             tools.df = df
@@ -113,14 +101,14 @@ def executa_etapa(state: State):
             df = novo_df
             tools.df = novo_df
 
-            new_messages = state["messages"] + [AIMessage(content=logs)]
+            new_messages = state["msg"] + [AIMessage(content=logs)]
 
 
         elif step == 2:
 
             # Pega a última mensagem humana para compor o prompt da etapa 2.
             last_human_message = None
-            for msg in reversed(state["messages"]):
+            for msg in reversed(state["msg"]):
                 # caso 1: já é HumanMessage
                 if isinstance(msg, HumanMessage):
                     last_human_message = msg.content
@@ -135,26 +123,26 @@ def executa_etapa(state: State):
             messages = [HumanMessage(content=prompt)]
 
             # Executa o agente pandas e extrai os logs e outputs das tools
-            # agent_output = agente_pandas.invoke(messages)
+            agent_output = agente_pandas.invoke(messages)
 
-            # intermediate_steps = agent_output.get("intermediate_steps", [])
+            intermediate_steps = agent_output.get("intermediate_steps", [])
 
-            # logs = [action_log.log for action_log, _ in intermediate_steps]
+            logs = [action_log.log for action_log, _ in intermediate_steps]
             
-            # tool_outputs = {}
-            # for action_log, observation in intermediate_steps:
-            #     tool_name = getattr(action_log, "tool", None)
-            #     output = utils.serialize_output(observation)
-            #     tool_outputs[tool_name] = output   # chave = nome da tool, valor = output
+            tool_outputs = {}
+            for action_log, observation in intermediate_steps:
+                tool_name = getattr(action_log, "tool", None)
+                output = utils.serialize_output(observation)
+                tool_outputs[tool_name] = output   # chave = nome da tool, valor = output
             
             # Pega a saída da tool automl
             dict_automl = next((v for k, v in tool_outputs.items() if "automl" in k), None)
             modelo = pickle.loads(base64.b64decode(dict_automl['modelo']))
             tool_output_final = dict_automl['predicoes']
             novo_df = pd.DataFrame(dict_automl['predicoes'])
-            new_messages = state["messages"] + [AIMessage(content=logs)]
+            new_messages = state["msg"] + [AIMessage(content=logs)]
 
-            # Para testar sem executar o automl
+            #>>>>>>>>>>>>>> Para testar sem executar o automl
             # tool_output_final = {'predicoes': {'real': {0: 5.8, 1: 5.5, 2: 5.8, 3: 5.8, 4: 5.6},
             # 'previsto': {0: 5.086650089557475,
             # 1: 4.981711405165194,
@@ -164,7 +152,7 @@ def executa_etapa(state: State):
             # novo_df = pd.DataFrame(tool_output_final["predicoes"])
             # modelo = pickle.load(open("model.pickle", 'rb'))
             # logs = ""
-            # new_messages = state["message"] + messages
+            # new_messages = state["msg"] + messages
             
             # Atualiza o dataframe global e o dataframe nas tools
             repl.locals["df"] = novo_df
@@ -194,7 +182,7 @@ def executa_etapa(state: State):
             # Pega a saída da tool plot_real_vs_pred
             tool_output_final = next((v for k, v in tool_outputs.items() if "plot_real_vs_pred" in k), None)
 
-            new_messages = state["messages"] + [AIMessage(content=logs)]
+            new_messages = state["msg"] + [AIMessage(content=logs)]
 
         elif step == 4:
 
@@ -218,19 +206,19 @@ def executa_etapa(state: State):
             # Pega a saída da tool desenhar_grafo
             tool_output_final = next((v for k, v in tool_outputs.items() if "desenhar_grafo" in k), None)
 
-            new_messages = state["messages"] + [AIMessage(content=logs)]
+            new_messages = state["msg"] + [AIMessage(content=logs)]
 
     except Exception as e:
         logs = f"Erro na execução da etapa {step}: {e}"
         tool_output_final = ""
-        new_messages = state["messages"] + [AIMessage(content=logs)]
+        new_messages = state["msg"] + [AIMessage(content=logs)]
 
-        tool_output_sanit = to_jsonable(tool_output_final)
-        return {
-            "messages": new_messages,
-            "log": logs,
-            "tool_output": state.get("tool_output", []) + [tool_output_sanit],
-        }
+    tool_output_sanit = utils.to_jsonable(tool_output_final)
+    return {
+                "messages": new_messages,
+                "log": logs,
+                "tool_output": state.get("tool_output", []) + [tool_output_sanit]
+            }
 
 def avalia_etapa(state: State):
     print(">>> Entrou no nó avalia_etapa", flush=True)
@@ -272,10 +260,8 @@ def proxima_etapa(state: State):
 
 def resume_etapa(state: State):
     print(">>> Entrou no nó resume_etapa", flush=True)
-
-    import json
-
-    global agente_pandas
+    
+    global agente_llm
 
     # json to text
     def _to_text(o):
@@ -310,7 +296,7 @@ def resume_etapa(state: State):
         )
 
         # agents invoke
-        agent_output = agente_pandas.invoke([HumanMessage(content=prompt)])
+        agent_output = agente_llm.invoke([HumanMessage(content=prompt)])
 
         # extract resumo text
         resumo_txt = (
@@ -319,25 +305,28 @@ def resume_etapa(state: State):
             else str(agent_output)
         ) or "Sem dados para resumir."
 
+
         # update state
-        new_messages = state.get("messages", []) + [
+        new_messages = state.get("msg", []) + [
             AIMessage(content=f"[Resumo - etapa {step}]\n{resumo_txt}")
         ]
         resumos = state.get("resumos", [])
         resumos.append(resumo_txt)
 
-        state["messages"] = new_messages
+        state["msg"] = new_messages
         state["resumos"] = resumos
+        
         return state
-
     except Exception as e:
         # exception handling
         falha = f"Falha no nó resume_etapa (step={state.get('step')}): {e}"
-        new_messages = state.get("messages", []) + [AIMessage(content=falha)]
-        state["messages"] = new_messages
+        new_messages = state.get("msg", []) + [AIMessage(content=falha)]
+        state["msg"] = new_messages
         resumos = state.get("resumos", [])
         resumos.append(falha)
         state["resumos"] = resumos
+        print(state["resumos"])
+
         return state
 
 
@@ -407,30 +396,26 @@ builder.add_edge("finaliza", END)
 
 
 # Para incluir memória inclua checkpointer no compile.
-checkpointer = MemorySaver()
+# checkpointer = MemorySaver()
 
 # No langsmith, não use o checkpointer, pois a própria ferramenta já salva o histórico.
 graph = builder.compile()
 
 # Compilando o workflow
-graph = builder.compile(checkpointer=checkpointer) 
+# graph = builder.compile(checkpointer=checkpointer) 
 
 
 # Desabilite o app.invoke para executar com o langsmith
-final_state = graph.invoke(
-    {
-        "messages": [HumanMessage(content="Faça a previsão de 5 passos à frente para a coluna Power.")],
-        "step": 1,
-        "log": "",
-        "tool_output": [],
-        "resumos": [],          # (padronize plural aqui também)
-        "avaliacao": "sim",
-        "feedback": "",
-        "avaliador_count": 0, 
-        "dataframe": "https://raw.githubusercontent.com/PatriciaLucas/AutoML/refs/heads/main/Datasets/ENERGY_1.csv",
-    },
-    config={"configurable": {"api_key": API_KEY, "thread_id": 42}},
-)
-
-# Show the final response
-print(final_state)
+# final_state = graph.invoke(
+#     {"msg": [HumanMessage(content="Faça a previsão de 5 passos à frente para a coluna ETO.")],
+#     'step': 1,
+#     "log": "",
+#     "tool_output": [],
+#     "resumos": [],
+#     "avaliacao": "sim",
+#     "feedback": "",
+#     "dataframe": 'CLIMATIC_2.csv',
+#     "avaliador_count": 0
+#     },
+#     config={"configurable": {"api_key": API_KEY, "thread_id": 42}}
+# )
