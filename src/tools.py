@@ -19,7 +19,15 @@ import matplotlib.lines as mlines
 from typing import List
 import pickle
 from typing import List, Dict, Tuple
+from langchain_community.vectorstores import Chroma
+from langchain_community.embeddings import DeepInfraEmbeddings
+from langchain_community.document_loaders.csv_loader import CSVLoader
+import os
+from dotenv import load_dotenv
+from langchain.text_splitter import RecursiveCharacterTextSplitter
 
+load_dotenv()
+API_KEY = os.getenv("API_KEY")
 
 class SchemaTools(BaseModel):
     coluna: str
@@ -31,6 +39,38 @@ class SchemaAutoml(BaseModel):
  
 
 class Tools:
+
+    @staticmethod
+    def rag(documento):
+        global retriever
+
+        # Load documentos
+        loader = CSVLoader(file_path=documento)
+        docs = loader.load()
+        
+        # Split documentos
+        text_splitter = RecursiveCharacterTextSplitter(chunk_size=100, chunk_overlap=50)
+        doc_splits = text_splitter.split_documents(docs)
+        
+        # Create VectorStore
+        vectorstore = Chroma.from_documents(
+            documents=doc_splits,
+            collection_name="docs",
+            embedding = DeepInfraEmbeddings(model_id="BAAI/bge-base-en-v1.5", deepinfra_api_token=API_KEY),
+        )
+        retriever = vectorstore.as_retriever()
+        return retriever
+
+
+    # Tool para RAG
+    @staticmethod
+    @tool
+    def retrieve_context(query: str):
+        """Pesquise sobre o que foi feito durante as etapas do pipeline para previsão de séries temporais."""
+        global retriever
+        results = retriever.invoke(query)
+        return "\n".join([doc.page_content for doc in results])
+    
 
     @staticmethod
     @tool(args_schema=SchemaAutoml, return_direct=True)
@@ -55,7 +95,7 @@ class Tools:
         train, test = df.head(int(df.shape[0] - step_ahead)), df.tail(step_ahead)
 
         model_automl = autodcets.AUTODCETS(
-            params_MEOHP={'npop': 20, 'ngen': 10, 'size_train': 200, 'size_test': 50},
+            params_MEOHP={'npop': 4, 'ngen': 2, 'size_train': 200, 'size_test': 50},
             feature_selection=True,
             distributive_version=False,
             save_model=True,
@@ -71,7 +111,7 @@ class Tools:
             forecast = model_automl.predict_ahead(step_ahead=step_ahead)[0]
         else:
             forecast = model_automl.predict_ahead_multivariate(step_ahead=step_ahead)[target]
-            
+
         real = test[target]
 
         output = pd.concat([real.reset_index(drop=True), forecast.reset_index(drop=True)], axis=1)
@@ -444,20 +484,18 @@ class Tools:
         # extrair valores que não são -1
         valores = [v[0] for v in data.values() if v[0] != -1]
 
-        if not valores:  # evita divisão por zero
-            return data
-
-        min_val = min(valores)
-        max_val = max(valores)
+        from sklearn.preprocessing import normalize
+        valores = normalize([valores])
 
         # normalização linear
         normalized = {}
+        i=0
         for k, v in data.items():
             if v[0] == -1:
                 normalized[k] = v
             else:
-                norm = (v[0] - min_val) / (max_val - min_val)
-                normalized[k] = [norm, v[1]]
+                normalized[k] = [valores[0][i], v[1]]
+                i += 1
         return normalized
     
     @staticmethod
@@ -482,7 +520,6 @@ class Tools:
             modelo.G_list[modelo.target] = df_final
             keys = modelo.G_list.keys()
             imf_keys = [k for k in keys if "IMF" in k]
-            print(imf_keys)
 
             importancias_imf = []
             for k in imf_keys:
@@ -493,6 +530,8 @@ class Tools:
             modelo.target = target_original
             
             importance, max_value = Tools.agrupar_dicts(modelo, importancias_imf)
+
+            print(importance)
 
             importance = Tools.normalize_importance(importance)
                 
@@ -599,4 +638,5 @@ class Tools:
         plt.close(fig)
         buf.seek(0)
         img_base64 = base64.b64encode(buf.read()).decode("utf-8")
-        return img_base64
+        return {'imagem': img_base64,
+                'importancia': importance}
