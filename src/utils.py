@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+from langchain.callbacks.base import BaseCallbackHandler
 
 def remover_valores_aleatorios(df, coluna="Close", proporcao=0.1):
     """
@@ -32,6 +33,7 @@ def serialize_output(output):
         return output
     else:
         return str(output)
+    
 
 def to_jsonable(x):
     import numpy as np, pandas as pd
@@ -48,3 +50,20 @@ def to_jsonable(x):
     if isinstance(x, dict):                  return {str(k): to_jsonable(v) for k, v in x.items()}
     if isinstance(x, list):                  return [to_jsonable(v) for v in x]
     return x
+
+
+class CaptureStepsHandler(BaseCallbackHandler):
+    def __init__(self):
+        self.logs = []
+
+    def on_chain_start(self, serialized, inputs, **kwargs):
+        self.logs.append(f"Start chain: {serialized.get('name', '')}")
+
+    def on_agent_action(self, action, **kwargs):
+        self.logs.append(f"Action: {action.tool}\nInput: {action.tool_input}")
+
+    def on_tool_end(self, output, **kwargs):
+        self.logs.append(f"Output: {output}")
+
+    def on_agent_finish(self, finish, **kwargs):
+        self.logs.append(f"Finish: {finish.return_values}")
