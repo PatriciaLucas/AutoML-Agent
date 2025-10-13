@@ -83,6 +83,8 @@ class Tools:
         - max_lags: número máximo de defasagens a serem consideradas no modelo.
         - decomposition: se True, aplica decomposição EMD antes da previsão.
         Retorna um DataFrame com as previsões.
+
+        Formato do input: {target: nome_da_coluna, step_ahead: número_passos, max_lags: valor, decomposition: true/false}
         """
         global df
         
@@ -115,7 +117,7 @@ class Tools:
         real = test[target]
 
         output = pd.concat([real.reset_index(drop=True), forecast.reset_index(drop=True)], axis=1)
-        output.columns = ["real", "previsto"]
+        output.columns = ["real "+target, "previsto "+target]
 
         # Serializa o modelo em binário
         model_bytes = pickle.dumps(model_automl)
@@ -135,8 +137,9 @@ class Tools:
         """
         Imputa valores ausentes na coluna usando interpolação linear.
         Argumento: coluna deve conter o nome de uma coluna existente no DataFrame df.
-
         Retorna um DataFrame imputado.
+
+        Formato do input: nome_da_coluna
         """
         global df
         
@@ -159,8 +162,9 @@ class Tools:
         """
         Imputa valores ausentes na coluna no DataFrame df utilizando interpolação spline (ordem 3).
         Argumento: coluna deve conter o nome de uma coluna existente no DataFrame df.
-
         Retorna um DataFrame imputado.
+
+        Formato do input: nome_da_coluna
         """
         global df
         # 1) Garante índice datetime
@@ -190,10 +194,9 @@ class Tools:
         Imputa valores ausentes na coluna no DataFrame df utilizando o método de preenchimento para trás (Backward Fill).
         O preenchimento para trás deve ser utilizado quando se assume que o valor ausente pode ser adequadamente representado pela próxima observação disponível.
         É mais indicado quando os dados variam lentamente e não há forte sazonalidade ou padrões complexos que invalidem essa suposição.
-
         Argumento: coluna deve conter o nome de uma coluna existente no DataFrame df.
-
         Retorna um DataFrame imputado.
+        Formato do input: nome_da_coluna
         """
         global df
         df = df.fillna(method="bfill")
@@ -207,8 +210,9 @@ class Tools:
         Imputa valores ausentes na coluna no DataFrame df utilizando a média dos dados.
         A imputação pela média deve ser utilizada em séries temporais aproximadamente estacionárias, onde a média é representativa do comportamento dos dados.
         Argumento: coluna deve conter o nome de uma coluna existente no DataFrame df.
-
         Retorna um DataFrame imputado.
+
+        Formato do input: nome_da_coluna
         """
         global df
         df = df.fillna(df.mean())
@@ -224,8 +228,9 @@ class Tools:
         A imputação pelo valor mais próximo é adequada quando os dados apresentam pouca variação entre pontos adjacentes.
         É especialmente útil em dados categóricos ou ordinais, onde faz sentido substituir o valor ausente pelo vizinho mais próximo observado.
         Argumento: coluna deve conter o nome de uma coluna existente no DataFrame df.
-
         Retorna um DataFrame imputado.
+
+        Formato do input: nome_da_coluna
         """
         global df
         df.index = pd.to_datetime(df.index, errors="raise")
@@ -240,6 +245,8 @@ class Tools:
         """Decompõe uma série temporal usando o método Empirical Mode Decomposition (EMD).
         Argumento: coluna deve conter o nome de uma coluna existente no DataFrame df.
         Retorna o dataframe imf com as componentes do EMD.
+
+        Formato do input: nome_da_coluna
         """
         global df, imf
         serie = df[coluna].values
@@ -255,6 +262,8 @@ class Tools:
         """Determina se uma série temporal é estacionária.
         Argumento: coluna deve conter o nome de uma coluna existente no DataFrame df.
         Retorna uma mensagem indicando se a série é estacionária ou não.
+
+        Formato do input: nome_da_coluna
         """
         global df
         serie = df[coluna]
@@ -293,6 +302,8 @@ class Tools:
         """
         Gera um gráfico de linha da coluna especificada no DataFrame df.
         Retorna a imagem em base64.
+
+        Formato do input: {nome_da_coluna}
         """
         global df
         # Garante que o índice é datetime
@@ -321,12 +332,14 @@ class Tools:
         Gera um gráfico de linhas comparando valores reais e previstos
         de uma série temporal.
         Retorna a imagem em base64.
+
+        Formato do input: essa ferramenta não requer input.
         """
         global df
 
         output = df
-        y_real = output['real'].tolist()
-        y_pred = output['previsto'].tolist()
+        y_real = output[df.columns[0]].tolist()
+        y_pred = output[df.columns[1]].tolist()
 
         # Verifica se as listas têm o mesmo tamanho
         if len(y_real) != len(y_pred):
@@ -364,6 +377,8 @@ class Tools:
         """
         Gera um gráfico de linha das componentes geradas pela EMD.
         Retorna a imagem em base64.
+
+        Formato do input: {nome_da_coluna}
         """
         global imf
         n_imfs = imf.shape[1]
@@ -631,8 +646,6 @@ class Tools:
         # plt.show()
 
         # Salva imagem em buffer e converte para base64
-        import base64
-        import io
         buf = io.BytesIO()
         plt.savefig(buf, format="png")
         plt.close(fig)
