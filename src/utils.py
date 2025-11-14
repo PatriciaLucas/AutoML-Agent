@@ -1,6 +1,13 @@
+
 import numpy as np
 import pandas as pd
+from langchain_community.vectorstores import Chroma
 from langchain.callbacks.base import BaseCallbackHandler
+from langchain_community.embeddings import DeepInfraEmbeddings
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_community.document_loaders.csv_loader import CSVLoader
+from langchain.schema import Document
+import os
 
 def remover_valores_aleatorios(df, coluna="Close", proporcao=0.1):
     """
@@ -67,3 +74,30 @@ class CaptureStepsHandler(BaseCallbackHandler):
 
     def on_agent_finish(self, finish, **kwargs):
         self.logs.append(f"Finish: {finish.return_values}")
+
+def carregar_csvs_pasta(pasta):
+    documentos = []
+    metadata = []
+    # Para cada csv na pasta
+    for arquivo in pasta.glob("*.csv"):
+        loader = CSVLoader(file_path=str(arquivo))
+        docs = loader.load()
+        documentos.extend(docs)
+        metadata.extend()
+
+    return documentos, metadata
+
+
+def append_list_csv(csv_path: str, data: list[str]):
+    """
+    Adiciona uma nova linha a um arquivo CSV. Cria o arquivo caso não exista. Adiciona os dados 
+    por meio do modo 'append'.
+    
+    Args:
+        csv_path: caminho para o csv
+        data: dicionário em que as chaves correspondem aos nomes das colunas e os valores são os dados a serem salvos
+    """
+    header = ["resumos"]
+    data_to_df = [[resumo] for resumo in data]
+    df = pd.DataFrame(data_to_df, columns=header)
+    df.to_csv(csv_path, index=False, encoding='utf-8')
