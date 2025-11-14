@@ -43,22 +43,22 @@ class Tools:
     @staticmethod
     def rag(documento):
         global retriever
-
         # Load documentos
         loader = CSVLoader(file_path=documento)
         docs = loader.load()
         
         # Split documentos
-        text_splitter = RecursiveCharacterTextSplitter(chunk_size=100, chunk_overlap=50)
+        text_splitter = RecursiveCharacterTextSplitter(separators = ['"'])
         doc_splits = text_splitter.split_documents(docs)
-        
+        print(len(doc_splits))
         # Create VectorStore
+        API_KEY = os.getenv('API_KEY')
         vectorstore = Chroma.from_documents(
             documents=doc_splits,
             collection_name="docs",
-            embedding = DeepInfraEmbeddings(model_id="BAAI/bge-base-en-v1.5", deepinfra_api_token=API_KEY),
+            embedding = DeepInfraEmbeddings(model_id="BAAI/bge-m3", deepinfra_api_token=API_KEY),
         )
-        retriever = vectorstore.as_retriever()
+        retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
         return retriever
 
 
@@ -97,7 +97,7 @@ class Tools:
         train, test = df.head(int(df.shape[0] - step_ahead)), df.tail(step_ahead)
 
         model_automl = autodcets.AUTODCETS(
-            params_MEOHP={'npop': 4, 'ngen': 2, 'size_train': 200, 'size_test': 50},
+            params_MEOHP={'npop': 4, 'ngen': 2, 'size_train': 500, 'size_test': 100},
             feature_selection=True,
             distributive_version=False,
             save_model=True,
@@ -116,6 +116,20 @@ class Tools:
 
         real = test[target]
 
+        forecast_m = forecast.values
+        real_m = real.values
+
+        RMSE = np.sqrt(np.mean((forecast_m - real_m) ** 2))
+        NRMSE = RMSE / (real_m.max() - real_m.min())
+        MAE = np.mean(np.abs(forecast_m - real_m))
+        MAPE = np.mean(np.abs((forecast_m - real_m) / real_m)) * 100
+
+        metrics = { "RMSE": float(RMSE.item() if hasattr(RMSE, "item") else RMSE), 
+                   "NRMSE": float(NRMSE.item() if hasattr(NRMSE, "item") else NRMSE), 
+                   "MAE": float(MAE.item() if hasattr(MAE, "item") else MAE), 
+                   "MAPE": float(MAPE.item() if hasattr(MAPE, "item") else MAPE) 
+                   }
+
         output = pd.concat([real.reset_index(drop=True), forecast.reset_index(drop=True)], axis=1)
         output.columns = ["real "+target, "previsto "+target]
 
@@ -127,7 +141,8 @@ class Tools:
 
         return {
             "predicoes": output.to_dict(),  
-            "modelo": model_b64 
+            "modelo": model_b64,
+            "metricas": metrics
         }
 
 
@@ -514,12 +529,42 @@ class Tools:
         return normalized
     
     @staticmethod
-    @tool(return_direct=True)
-    def desenhar_grafo():
+    def resumo_grafo(grafo_dict):
+        """
+        Converte o dicionário de DataFrames do grafo em um resumo textual.
+        Cada variável terá uma descrição do tipo:
+        'Rs (lags 1,2), Tmax (lag 1), ETO (lag 1)'
+        """
+        resumo = {}
 
-        """ Desenha o grafo de importância das variáveis do modelo.
+        for var, df in grafo_dict.items():
+            descricoes = []
+
+            # percorre cada coluna do dataframe
+            for col in df.columns:
+                # verifica as linhas (lags) onde o valor é True
+                lags = df.index[df[col] == True].tolist()
+
+                if lags:
+                    if len(lags) == 1:
+                        descricoes.append(f"{col} (lag {lags[0]})")
+                    else:
+                        lags_str = ", ".join(map(str, lags))
+                        descricoes.append(f"{col} (lags {lags_str})")
+
+            resumo[var] = ", ".join(descricoes) if descricoes else "Nenhuma variável relevante selecionada."
+
+        return resumo
+
+    @staticmethod
+    @tool(return_direct=False)
+    def extrair_informacao_automl():
+
+        """ Extrai informações importantes geradas pelo modelo automl.
         Argumento: model deve ser um modelo treinado do AUTODCE-TS.
-        Retorna a imagem do grafo em base64.
+        Retorna um dicionário com informações extraídas do automl.
+
+        Formato do input: essa ferramenta não requer input.
         """
         
         global modelo
@@ -545,13 +590,12 @@ class Tools:
             modelo.target = target_original
             
             importance, max_value = Tools.agrupar_dicts(modelo, importancias_imf)
-
-            print(importance)
-
             importance = Tools.normalize_importance(importance)
                 
         else:
             importance, max_value = Tools.get_importance(modelo)
+            importance = Tools.normalize_importance(importance)
+            
 
         variables = Tools.get_variables(modelo)
         arestas = Tools.get_edges(importance, modelo)
@@ -651,5 +695,10 @@ class Tools:
         plt.close(fig)
         buf.seek(0)
         img_base64 = base64.b64encode(buf.read()).decode("utf-8")
-        return {'imagem': img_base64,
-                'importancia': importance}
+
+        grafo_resumo = Tools.resumo_grafo(modelo.G_list)
+        return {'importancia': importance,
+                'grafo': grafo_resumo,
+                'modelo_dict': modelo.dict_variables,
+                'imagem_grafo': img_base64
+                }
