@@ -1,5 +1,6 @@
 from langchain_community.chat_models import ChatDeepInfra
 from langchain_experimental.agents.agent_toolkits import create_pandas_dataframe_agent
+from langchain_core.output_parsers import StrOutputParser
 from langchain.agents import initialize_agent
 import pandas as pd
 from dotenv import load_dotenv
@@ -34,7 +35,8 @@ class Agent:
                                                 extra_tools=tools,
                                                 max_interations=10,
                                                 prefix=prefix,
-                                                sufix=sufix
+                                                sufix=sufix,
+                                                output_parser=StrOutputParser()
                                                 )
         elif name == 'react':
             return initialize_agent(
@@ -46,9 +48,6 @@ class Agent:
         
         else:
             return self.llm
-        
-
-
         
 
 
