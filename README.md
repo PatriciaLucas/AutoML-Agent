@@ -1,6 +1,6 @@
-# 🤖 AutoML-Agent
+# 🤖 FAE: A Multi-Agent System for Automated and Explainable Time Series Forecasting Pipelines
 
-> Projeto desenvolvido pelo Projeto **Agents-of-Future** do FutureLab (DCC-UFMG) em Parceria com a KUNUMI S/A.
+> Project developed by the **Agents-of-Future** Project of FutureLab (DCC-UFMG) in partnership with KUNUMI S/A.
 >  <p align="left">
 >  <img src="https://github.com/PatriciaLucas/AutoML-Agent/blob/main/docs/slide_logos.png?raw=true" alt="Arquitetura" width="300"/>
 >  </p> 
@@ -9,8 +9,8 @@
 
 ## 🔍 Visão Geral
 
-Este projeto investiga o uso de **agentes baseados em LLMs (Large Language Models)** para apoiar usuários de sistemas AutoML.  
-O objetivo é fornecer uma **interface mais acessível, interativa e explicativa** através de linguagem natural, tornando os processos de Machine Learning mais fáceis de usar.
+This project investigates the use of LLM-based agents (Large Language Model agents) to assist users of AutoML systems.
+The goal is to provide a more accessible, interactive, and explainable interface through natural language, making Machine Learning processes easier to use.
 
 ## Sistema de orquestração de agentes
 >  <p align="left">
