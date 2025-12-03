@@ -7,32 +7,32 @@
 
 ---
 
-## 🔍 Visão Geral
+## 🔍 Overview
 
 This project investigates the use of LLM-based agents (Large Language Model agents) to assist users of AutoML systems.
 The goal is to provide a more accessible, interactive, and explainable interface through natural language, making Machine Learning processes easier to use.
 
-## Sistema de orquestração de agentes
+## FAE
 >  <p align="left">
->  <img src="https://github.com/PatriciaLucas/AutoML-Agent/blob/main/docs/sistema1.png?raw=true" alt="Arquitetura" width="1100"/>
+>  <img src="https://github.com/PatriciaLucas/AutoML-Agent/blob/main/docs/FAE.png?raw=true" alt="Arquitetura" width="1100"/>
 >  </p> 
 
 
 ---
 
-## 📂 Estrutura do Repositório
+## 📂 Repository Structure
 
 AutoML-Agent/
-- **docs/** – Documentação, artigos e figuras
-- **src/** – Código-fonte principal
-- **notebooks/** – Experimentos e protótipos em Jupyter
-- **requirements.txt** – Dependências do projeto
-- **README.md** – Documentação principal
+- **docs/** – Documentation, papers, and figures
+- **src/** – Main source code
+- **notebooks/** – Experiments and prototypes in Jupyter
+- **requirements.txt** – Project dependencies
+- **README.md** – Main documentation
 
 
 ---
 
-## 👥 Colaboradores
+## 👥 Contributors
 
 - Cauã Ferreira Sathler Siman
 - Gabriel Ikaro Fonseca de Paiva
@@ -43,7 +43,7 @@ AutoML-Agent/
 
 ---
 
-## 📚 Publicações
+## 📚 Publications
 
 - *(a ser adicionado)*
 
